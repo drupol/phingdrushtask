@@ -4,6 +4,7 @@
  * @file
  * A Phing task to run Drush commands.
  */
+
 require_once "phing/Task.php";
 
 /**
@@ -12,9 +13,73 @@ require_once "phing/Task.php";
 class DrushParam {
 
   /**
-   * @var string The parameter's value.
+   * The parameter's value.
+   *
+   * @var string
    */
   protected $value;
+
+  /**
+   * If TRUE, escape the value. Otherwise not. Default is TRUE.
+   *
+   * @var bool
+   */
+  protected $escape;
+
+  /**
+   * If TRUE, surround the value with quotes. Otherwise not. Default is TRUE.
+   *
+   * @var bool
+   */
+  protected $quote;
+
+  /**
+   * Set the escape's param value.
+   *
+   * @param string|bool $escape
+   *   The escape's param value.
+   */
+  public function setEscape($escape = TRUE) {
+    $this->escape = $escape;
+  }
+
+  /**
+   * Get the escape's param value.
+   *
+   * @return bool
+   *   The escape's param value.
+   */
+  public function getEscape() {
+    return ($this->escape === 'yes' || $this->escape === 'true');
+  }
+
+  /**
+   * Set the quote's param value.
+   *
+   * @param string|bool $quote
+   *   The quote's param value.
+   */
+  public function setQuote($quote = TRUE) {
+    $this->quote = $quote;
+  }
+
+  /**
+   * Get the quote's param value.
+   *
+   * @return bool
+   *   The quote's param value.
+   */
+  public function getQuote() {
+    return ($this->quote === 'yes' || $this->quote === 'true');
+  }
+
+  /**
+   * DrushParam constructor.
+   */
+  public function __construct() {
+    $this->setEscape();
+    $this->setQuote();
+  }
 
   /**
    * Set the parameter value from a text element.
@@ -29,11 +94,31 @@ class DrushParam {
   /**
    * Get the parameter's value.
    *
-   * return string
+   * @return string
    *   The parameter value.
    */
   public function getValue() {
     return $this->value;
+  }
+
+  /**
+   * Get the string.
+   *
+   * @return string
+   *   The parameter string.
+   */
+  public function toString() {
+    $value = $this->getValue();
+
+    if ($this->getEscape()) {
+      $value = escapeshellcmd($value);
+    }
+
+    if ($this->getQuote()) {
+      $value = '"' . $value . '"';
+    }
+
+    return $value;
   }
 
 }
@@ -44,12 +129,18 @@ class DrushParam {
 class DrushOption {
 
   /**
-   * @var string The option's name.
+   * The option's name.
+   *
+   * @var string
+   *   The option's name.
    */
   protected $name;
 
   /**
-   * @var string The option's value.
+   * The option's value.
+   *
+   * @var string
+   *   The option's value.
    */
   protected $value;
 
@@ -104,10 +195,13 @@ class DrushOption {
   }
 
   /**
-   * @{inheritdoc}
+   * Get the a representation of the option.
+   *
+   * @return string
+   *   The option as a string.
    */
   public function toString() {
-    $name  = $this->getName();
+    $name = $this->getName();
     $value = $this->getValue();
     $str = '--' . $name;
     if (isset($value) && $value != '') {
@@ -119,102 +213,136 @@ class DrushOption {
 }
 
 /**
- * DrushTask
+ * DrushTask.
  *
  * Runs the Drush commad line tool.
- * See https://github.com/drush-ops/drush
+ * See https://github.com/drush-ops/drush.
  */
 class DrushTask extends Task {
 
   /**
-   * @var string The executed Drush command.
+   * The command to execute.
+   *
+   * @var string
    */
   protected $command = NULL;
 
   /**
-   * @var string Path the the Drush binary.
+   * Path the the Drush binary.
+   *
+   * @var string
    */
   protected $bin = NULL;
 
   /**
-   * @var string URI of the Drupal site to use.
+   * URI of the Drupal site to use.
+   *
+   * @var string
    */
   protected $uri = NULL;
 
   /**
-   * @var string Drupal root directory to use.
+   * Drupal root directory to use.
+   *
+   * @var string
    */
   protected $root = NULL;
 
   /**
-   * @var bool If set, assume 'yes' or 'no' as answer to all prompts.
+   * If set, assume 'yes' or 'no' as answer to all prompts.
+   *
+   * @var bool
    */
   protected $assume = NULL;
 
   /**
-   * @var bool If true, simulate all relevant actions.
+   * If true, simulate all relevant actions.
+   *
+   * @var bool
    */
   protected $simulate = FALSE;
 
   /**
-   * @var bool Use the pipe option.
+   * Use the pipe option.
+   *
+   * @var bool
    */
   protected $pipe = FALSE;
 
   /**
-   * @var array An array of DrushOption.
+   * An array of DrushOption.
+   *
+   * @var DrushOption[]
    */
   protected $options = array();
+
   /**
-   * @var array Am array of DrushParam.
+   * An array of DrushParam.
+   *
+   * @var DrushParam[]
    */
   protected $params = array();
 
   /**
-   * @var string The 'glue' characters used between each line of the returned
-   *   output.
+   * The 'glue' characters used between each line of the returned output.
+   *
+   * @var string
    */
   protected $returnGlue = "\n";
 
   /**
-   * @var string The name of a Phing property to assign the Drush command's
-   *   output to.
+   * The name of a Phing property to assign the Drush command's output to.
+   *
+   * @var string
    */
   protected $returnProperty = NULL;
 
   /**
-   * @var bool Display extra information avout the command.
+   * Display extra information about the command.
+   *
+   * @var bool
    */
   protected $verbose = FALSE;
 
   /**
-   * @var bool Should the build fail on Drush errors
+   * Should the build fail on Drush errors.
+   *
+   * @var bool
    */
   protected $haltOnError = TRUE;
 
   /**
-   * @var string The alias of the Drupal site to use.
+   * The alias of the Drupal site to use.
+   *
+   * @var string
    */
   protected $alias = NULL;
 
   /**
-   * @var string Path to an additional config file to load.
+   * Path to an additional config file to load.
+   *
+   * @var string
    */
   protected $config = NULL;
 
   /**
-   * @var string Specifies the list of paths where drush will search for alias
-   *   files.
+   * Specifies the list of paths where drush will search for alias files.
+   *
+   * @var string
    */
   protected $aliasPath = NULL;
 
   /**
-   * @var bool Whether or not to use color output.
+   * Whether or not to use colored output.
+   *
+   * @var bool
    */
   protected $color = FALSE;
 
   /**
-   * @var PhingFile Working directory.
+   * Working directory.
+   *
+   * @var string
    */
   protected $dir;
 
@@ -392,9 +520,8 @@ class DrushTask extends Task {
   /**
    * Specify the working directory for executing this command.
    *
-   * @param PhingFile $dir Working directory
-   *
-   * @return void
+   * @param PhingFile $dir
+   *   Working directory.
    */
   public function setDir(PhingFile $dir) {
     $this->dir = $dir;
@@ -431,7 +558,6 @@ class DrushTask extends Task {
       $option->setName('nocolor');
       $this->options[] = $option;
     }
-
 
     if (!empty($this->root)) {
       $option = new DrushOption();
@@ -492,7 +618,7 @@ class DrushTask extends Task {
     $command[] = $this->command;
 
     foreach ($this->params as $param) {
-      $command[] = '"' . escapeshellcmd($param->getValue()) . '"';
+      $command[] = $param->toString();
     }
 
     $command = implode(' ', $command);
@@ -527,4 +653,3 @@ class DrushTask extends Task {
   }
 
 }
-
