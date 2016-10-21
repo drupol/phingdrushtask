@@ -10,7 +10,7 @@ require_once "phing/Task.php";
 /**
  * A Drush CLI parameter.
  */
-class DrushParam {
+class DrushParam extends DataType {
 
   /**
    * The parameter's value.
@@ -24,19 +24,19 @@ class DrushParam {
    *
    * @var bool
    */
-  protected $escape;
+  protected $escape = TRUE;
 
   /**
    * If TRUE, surround the value with quotes. Otherwise not. Default is TRUE.
    *
    * @var bool
    */
-  protected $quote;
+  protected $quote = TRUE;
 
   /**
    * Set the escape's param value.
    *
-   * @param string|bool $escape
+   * @param bool $escape
    *   The escape's param value.
    */
   public function setEscape($escape = TRUE) {
@@ -50,13 +50,13 @@ class DrushParam {
    *   The escape's param value.
    */
   public function getEscape() {
-    return ($this->escape === 'yes' || $this->escape === 'true');
+    return $this->escape;
   }
 
   /**
    * Set the quote's param value.
    *
-   * @param string|bool $quote
+   * @param bool $quote
    *   The quote's param value.
    */
   public function setQuote($quote = TRUE) {
@@ -70,21 +70,13 @@ class DrushParam {
    *   The quote's param value.
    */
   public function getQuote() {
-    return ($this->quote === 'yes' || $this->quote === 'true');
-  }
-
-  /**
-   * DrushParam constructor.
-   */
-  public function __construct() {
-    $this->setEscape();
-    $this->setQuote();
+    return $this->quote;
   }
 
   /**
    * Set the parameter value from a text element.
    *
-   * @param mixed $str
+   * @param string $str
    *   The value of the text element.
    */
   public function addText($str) {
@@ -203,10 +195,12 @@ class DrushOption {
   public function toString() {
     $name = $this->getName();
     $value = $this->getValue();
-    $str = '--' . $name;
+    $str = sprintf('--%s', $name);
+
     if (isset($value) && $value != '') {
-      $str .= '="' . escapeshellcmd($value) . '"';
+      $str = sprintf('%s="%s"', $str, escapeshellcmd($value));
     }
+
     return $str;
   }
 
@@ -230,21 +224,21 @@ class DrushTask extends Task {
   /**
    * Path the the Drush binary.
    *
-   * @var string
+   * @var PhingFile
    */
-  protected $bin = NULL;
+  protected $bin = 'drush';
 
   /**
    * URI of the Drupal site to use.
    *
-   * @var string
+   * @var PhingFile
    */
   protected $uri = NULL;
 
   /**
    * Drupal root directory to use.
    *
-   * @var string
+   * @var PhingFile
    */
   protected $root = NULL;
 
@@ -253,7 +247,7 @@ class DrushTask extends Task {
    *
    * @var bool
    */
-  protected $assume = NULL;
+  protected $assume = FALSE;
 
   /**
    * If true, simulate all relevant actions.
@@ -268,20 +262,6 @@ class DrushTask extends Task {
    * @var bool
    */
   protected $pipe = FALSE;
-
-  /**
-   * An array of DrushOption.
-   *
-   * @var DrushOption[]
-   */
-  protected $options = array();
-
-  /**
-   * An array of DrushParam.
-   *
-   * @var DrushParam[]
-   */
-  protected $params = array();
 
   /**
    * The 'glue' characters used between each line of the returned output.
@@ -347,174 +327,166 @@ class DrushTask extends Task {
   protected $dir;
 
   /**
-   * The Drush command to run.
+   * An array of Option.
+   *
+   * @var DrushOption[]
    */
-  public function setCommand($str) {
-    $this->command = $str;
+  protected $options = array();
+
+  /**
+   * An array of Param.
+   *
+   * @var DrushParam[]
+   */
+  protected $params = array();
+
+  /**
+   * The Drush command to run.
+   *
+   * @param string $command
+   *   The Drush command's name.
+   */
+  public function setCommand($command) {
+    $this->command = $command;
   }
 
   /**
    * Path the Drush executable.
+   *
+   * @param PhingFile $bin
+   *   The path to the Drush executable.
    */
-  public function setBin($str) {
-    $this->bin = $str;
+  public function setBin(PhingFile $bin) {
+    $this->bin = $bin;
   }
 
   /**
    * Drupal root directory to use.
+   *
+   * @param PhingFile $root
+   *   The Drupal's root directory to use.
    */
-  public function setRoot($str) {
-    $this->root = $str;
+  public function setRoot(PhingFile $root) {
+    $this->root = $root;
   }
 
   /**
    * URI of the Drupal to use.
+   *
+   * @param string $uri
+   *   The URI of the Drupal site to use.
    */
-  public function setUri($str) {
-    $this->uri = $str;
+  public function setUri($uri) {
+    $this->uri = $uri;
   }
 
   /**
-   * Assume 'yes' or 'no' to all prompts.
+   * Set the assume option. 'yes' or 'no' to all prompts.
+   *
+   * @param string $assume
+   *   The assume option.
    */
-  public function setAssume($var) {
-    if (is_string($var)) {
-      $this->assume = ($var === 'yes');
-    }
-    else {
-      $this->assume = !!$var;
-    }
+  public function setAssume($assume) {
+    $this->assume = $assume;
   }
 
   /**
-   * Simulate all relevant actions.
+   * Set the simulate option.
+   *
+   * @param string $simulate
+   *   The simulate option.
    */
-  public function setSimulate($var) {
-    if (is_string($var)) {
-      $var = strtolower($var);
-      $this->simulate = ($var === 'yes' || $var === 'true');
-    }
-    else {
-      $this->simulate = !!$var;
-    }
+  public function setSimulate($simulate) {
+    $this->simulate = $simulate;
   }
 
   /**
-   * Use the pipe option.
+   * Set the the pipe option.
+   *
+   * @param bool $pipe
+   *   The pipe option.
    */
-  public function setPipe($var) {
-    if (is_string($var)) {
-      $var = strtolower($var);
-      $this->pipe = ($var === 'yes' || $var === 'true');
-    }
-    else {
-      $this->pipe = !!$var;
-    }
+  public function setPipe($pipe) {
+    $this->pipe = $pipe;
   }
 
   /**
    * The 'glue' characters used between each line of the returned output.
+   *
+   * @param string $glue
+   *   The glue character.
    */
-  public function setReturnGlue($str) {
-    $this->returnGlue = (string) $str;
+  public function setReturnGlue($glue) {
+    $this->returnGlue = (string) $glue;
   }
 
   /**
    * The name of a Phing property to assign the Drush command's output to.
+   *
+   * @param string $property
+   *   The property's name.
    */
-  public function setReturnProperty($str) {
-    $this->returnProperty = $str;
+  public function setReturnProperty($property) {
+    $this->returnProperty = $property;
   }
 
   /**
    * Should the task fail on Drush error (non zero exit code).
+   *
+   * @param string $haltOnError
+   *   The value of the Halt On Error option.
    */
-  public function setHaltOnError($var) {
-    if (is_string($var)) {
-      $var = strtolower($var);
-      $this->haltOnError = ($var === 'yes' || $var === 'true');
-    }
-    else {
-      $this->haltOnError = !!$var;
-    }
+  public function setHaltOnError($haltOnError) {
+    $this->haltOnError = $haltOnError;
   }
-
-  /**
-   * Parameters for the Drush command.
-   */
-  public function createParam() {
-    $o = new DrushParam();
-    $this->params[] = $o;
-    return $o;
-  }
-
-  /**
-   * Options for the Drush command.
-   */
-  public function createOption() {
-    $o = new DrushOption();
-    $this->options[] = $o;
-    return $o;
-  }
-
   /**
    * Display extra information about the command.
+   *
+   * @param bool $verbose
+   *   The verbose option.
    */
-  public function setVerbose($var) {
-    if (is_string($var)) {
-      $this->verbose = ($var === 'yes');
-    }
-    else {
-      $this->verbose = !!$var;
-    }
+  public function setVerbose($verbose) {
+    $this->verbose = $verbose;
   }
 
   /**
-   * Site alias.
+   * Set the site alias.
+   *
+   * @param string $alias
+   *   The site alias.
    */
-  public function setAlias($var) {
-    if (is_string($var)) {
-      $this->alias = $var;
-    }
-    else {
-      $this->alias = NULL;
-    }
+  public function setAlias($alias) {
+    $this->alias = $alias;
   }
 
   /**
-   * Path top an additional config file to load.
+   * Set the path to an additional config file to load.
+   *
+   * @param PhingFile $config
+   *   The path to the additional config file to load.
    */
-  public function setConfig($var) {
-    if (is_string($var) && !empty($var)) {
-      $this->config = $var;
-    }
-    else {
-      $this->config = NULL;
-    }
+  public function setConfig(PhingFile $config) {
+    $this->config = $config;
   }
 
   /**
-   * A list of paths where drush will search for alias files.
+   * Set the list of paths where drush will search for alias files.
+   *
+   * @param string $aliasPath
+   *   The list of paths.
    */
-  public function setAliasPath($var) {
-    if (is_string($var) && !empty($var)) {
-      $this->aliasPath = $var;
-    }
-    else {
-      $this->aliasPath = NULL;
-    }
+  public function setAliasPath($aliasPath) {
+    $this->aliasPath = $aliasPath;
   }
 
   /**
    * Whether or not to use color output.
+   *
+   * @param bool $color
+   *   The color option.
    */
-  public function setColor($var) {
-    if (is_string($var) && !empty($var)) {
-      $this->color = ($var === 'yes');
-    }
-    else {
-      $this->color = (boolean) $var;
-    }
+  public function setColor($color) {
+    $this->color = $color;
   }
 
   /**
@@ -528,17 +500,52 @@ class DrushTask extends Task {
   }
 
   /**
-   * Initialize the task.
+   * {@inheritdoc}
    */
   public function init() {
     // Get default properties from project.
-    $this->alias = $this->getProject()->getProperty('drush.alias');
-    $this->root = $this->getProject()->getProperty('drush.root');
-    $this->uri = $this->getProject()->getProperty('drush.uri');
-    $this->bin = $this->getProject()->getProperty('drush.bin');
-    $this->config = $this->getProject()->getProperty('drush.config');
-    $this->aliasPath = $this->getProject()->getProperty('drush.alias-path');
-    $this->color = $this->getProject()->getProperty('drush.color');
+    $properties_mapping = array(
+      'alias' => 'drush.alias',
+      'aliasPath' => 'drush.alias-path',
+      'assume' => 'drush.assume',
+      'bin' => 'drush.bin',
+      'color' => 'drush.color',
+      'config' => 'drush.config',
+      'pipe' => 'drush.pipe',
+      'root' => 'drush.root',
+      'simulate' => 'drush.simulate',
+      'uri' => 'drush.uri',
+      'verbose' => 'drush.verbose',
+    );
+
+    foreach ($properties_mapping as $class_property => $drush_property) {
+      if (!empty($this->getProject()->getProperty($drush_property))) {
+        // TODO: We should use a setter here.
+        $this->{$class_property} = $this->getProject()->getProperty($drush_property);
+      }
+    }
+  }
+
+  /**
+   * Parameters of the Drush command.
+   *
+   * @return DrushParam
+   *   The created parameter.
+   */
+  public function createParam() {
+    $num = array_push($this->params, new DrushParam());
+    return $this->params[$num - 1];
+  }
+
+  /**
+   * Options of the Drush command.
+   *
+   * @return DrushOption
+   *   The created option.
+   */
+  public function createOption() {
+    $num = array_push($this->options, new DrushOption());
+    return $this->options[$num - 1];
   }
 
   /**
@@ -547,47 +554,56 @@ class DrushTask extends Task {
   public function main() {
     $command = array();
 
-    $command[] = !empty($this->bin) ? '"' . $this->bin . '"' : 'drush';
+    /**
+     * The Drush binary command.
+     */
+    $command[] = $this->bin;
 
-    if (!empty($this->alias)) {
+    /**
+     * The site alias.
+     */
+    if ($this->alias) {
       $command[] = $this->alias;
     }
 
-    if (empty($this->color)) {
+    /**
+     * The options
+     */
+    if (!$this->color) {
       $option = new DrushOption();
       $option->setName('nocolor');
       $this->options[] = $option;
     }
 
-    if (!empty($this->root)) {
+    if ($this->root) {
       $option = new DrushOption();
       $option->setName('root');
       $option->addText($this->root);
       $this->options[] = $option;
     }
 
-    if (!empty($this->uri)) {
+    if ($this->uri) {
       $option = new DrushOption();
       $option->setName('uri');
-      $option->addText($this->uri);
+      $option->addText($this->uri->getAbsolutePath());
       $this->options[] = $option;
     }
 
-    if (!empty($this->config)) {
+    if ($this->config) {
       $option = new DrushOption();
       $option->setName('config');
       $option->addText($this->config);
       $this->options[] = $option;
     }
 
-    if (!empty($this->aliasPath)) {
+    if ($this->aliasPath) {
       $option = new DrushOption();
       $option->setName('alias-path');
       $option->addText($this->aliasPath);
       $this->options[] = $option;
     }
 
-    if (is_bool($this->assume)) {
+    if ($this->assume) {
       $option = new DrushOption();
       $option->setName(($this->assume ? 'yes' : 'no'));
       $this->options[] = $option;
@@ -615,8 +631,14 @@ class DrushTask extends Task {
       $command[] = $option->toString();
     }
 
+    /**
+     * The Drush command to run.
+     */
     $command[] = $this->command;
 
+    /**
+     * The parameters.
+     */
     foreach ($this->params as $param) {
       $command[] = $param->toString();
     }
@@ -629,7 +651,7 @@ class DrushTask extends Task {
     }
 
     // Execute Drush.
-    $this->log("Executing '$command'...");
+    $this->log("Executing: " . $command);
     $output = array();
     exec($command, $output, $return);
 
@@ -641,14 +663,17 @@ class DrushTask extends Task {
     foreach ($output as $line) {
       $this->log($line);
     }
+
     // Set value of the 'pipe' property.
     if (!empty($this->returnProperty)) {
       $this->getProject()->setProperty($this->returnProperty, implode($this->returnGlue, $output));
     }
-    // Build fail.
+
+    // When build failed.
     if ($this->haltOnError && $return != 0) {
-      throw new BuildException("Drush exited with code $return");
+      throw new BuildException("Drush exited with code: " . $return);
     }
+
     return $return != 0;
   }
 
